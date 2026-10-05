@@ -167,7 +167,7 @@ def remez_chain(l, iters, q, cushion=0.02407327424182761):
 #   result = x * sum_k out_k          (a polynomial of degree 2^(m+1)+1 in x)
 #
 # theta = [A_0 .. A_{m-1}, B_0 .. B_{m-1}, c]  with |A_i| = |B_i| = i+2, |c| = m+2
-# (c[m], c[m+1] are never used; they just keep the original layout.)
+# (c[m], c[m+1] are never used) TODO: Remove them
 # ----------------------------------------------------------------------------
 def n_params(m):
     return m * (m + 3) + (m + 2)
@@ -343,7 +343,7 @@ def pin_fixed_point(theta, m, nodes, c, weights=(1,1,1,1), gn_iters=3000, gn_tol
 
 
 def initial_guess(m, seed=0):
-    """Hand-found starting point for m=3 (degree 17); random otherwise."""
+    """Starting guesses for all values of l for m=3 (degree 17); random otherwise."""
     if m == 3:
         A = [
             [8.1900628402201772e00, -1.1341497882285287e01],
@@ -360,47 +360,7 @@ def initial_guess(m, seed=0):
     print(f"[warning] no built-in initial guess for m={m}; using a random one (may not converge).")
     return np.random.default_rng(seed).standard_normal(n_params(m))
 
-def last_guess(m, seed=0):
-    """Hand-found starting point for m=3 (degree 17); random otherwise."""
-    if m == 3:
-        A =  [
-        
-                    [1.6031574106559976e01, -1.1147498488902956e01],
-        
-                    [4.2026958242656027e00, -1.1950450600727466e01, -8.1313541853831222e00],
-        
-                    [2.5803801639056574e00, -1.6476836162133901e00, -2.8026154399513548e00, -1.9348904425589695e00],
-        
-                ]
-        
-        B =        [
-        
-                    [5.1105010106341799e00, -1.6447337553819647e01],
-        
-                    [2.4323150509918314e01, -9.7183194558286310e00, -7.3093303735788435e00],
-        
-                    [-7.5994104159191522e00, 4.7819666281751774e00, 1.6589010640978155e00, 1.7980217613035476e00],
-        
-                ]
-        
-        c =        [
-        
-                    -3.6470399492116688e-03,
-        
-                    1.9560705832703747e-02,
-        
-                    -3.5247930092353254e-02,
-        
-                    -1.0000000000000000e00,
-        
-                    1.0000000000000000e00,
-        
-                ]
-
-        return pack([np.array(a) for a in A], [np.array(b) for b in B], c)
-    print(f"[warning] no built-in initial guess for m={m}; using a random one (may not converge).")
-    return np.random.default_rng(seed).standard_normal(n_params(m))
-
+# These are to coefficients that were used from the earlier code. Differs slightly. Probably because it became more accurate
 """co17 = [
     [
         8.1900628402201772e00, -1.1341497882285287e01,
