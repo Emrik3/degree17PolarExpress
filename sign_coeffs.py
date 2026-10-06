@@ -134,7 +134,7 @@ def remez_chain(l, iters, q, cushion=0.02407327424182761):
     coeffs, bounds = [], []
     for _ in range(iters):
         bounds.append((l, u))
-        if 1.0 - l <= 1e-9:
+        if 1 - 5e-6 <= l / u:
             # Already converged: use the Taylor polynomial at 1 (quadratic convergence).
             c = taylor_coeffs(q)
             u = 2.0 - l
@@ -199,7 +199,7 @@ def _forward(theta, m, x):
         k = i + 2
         u = A[i] @ out[:k]
         v = B[i] @ out[:k]
-        out[k] = c[i] * u * v
+        out[k] = u * v
         U.append(u)
         V.append(v)
     return out, U, V, A, B, c
@@ -208,21 +208,21 @@ def _forward(theta, m, x):
 def eval_poly(theta, m, x):
     """Vectorised evaluation of the scheme at the points x."""
     x = np.atleast_1d(np.asarray(x, dtype=float))
-    out = _forward(theta, m, x)[0]
-    return x * out.sum(axis=0)
+    out, _, _, _, _, c = _forward(theta, m, x)
+    return x * (c[:, None] * out).sum(axis=0)
 
 
 def eval_jac(theta, m, x):
     """Values and analytic Jacobian d value / d theta, shape (len(x), n_params)."""
     x = np.atleast_1d(np.asarray(x, dtype=float))
     out, U, V, A, B, c = _forward(theta, m, x)
-    val = x * out.sum(axis=0)
+    val = x * (c[:, None] * out).sum(axis=0)
 
-    # Reverse sweep: g[k] = d(sum_j out_j) / d out_k
-    g = np.ones((m + 2, x.size))
+    # Reverse sweep: g[k] = d( sum_j c_j out_j ) / d out_k
+    g = np.repeat(np.asarray(c, float)[:, None], x.size, axis=1)   # seed with c_k
     for k in range(m + 1, -1, -1):
         for i in range(max(k - 1, 0), m):
-            g[k] += g[i + 2] * c[i] * (A[i][k] * V[i] + B[i][k] * U[i])
+            g[k] += g[i + 2] * (A[i][k] * V[i] + B[i][k] * U[i]) 
 
     P = n_params(m)
     J = np.zeros((x.size, P))
@@ -230,10 +230,10 @@ def eval_jac(theta, m, x):
     nA = a_off[-1]
     for i in range(m):
         k = i + 2
-        w = x * g[i + 2] * c[i]
+        w = x * g[i + 2]                                          
         J[:, a_off[i] : a_off[i] + k] = (w * V[i])[:, None] * out[:k].T
         J[:, nA + a_off[i] : nA + a_off[i] + k] = (w * U[i])[:, None] * out[:k].T
-        J[:, 2 * nA + i] = x * g[i + 2] * U[i] * V[i]
+    J[:, 2 * nA : 2 * nA + m + 2] = x[:, None] * out.T             
     return val, J
 
 
@@ -355,8 +355,11 @@ def initial_guess(m, seed=0):
             [2.4027229678283074e01, -6.9033542160046899e00, -8.1581776809768751e00],
             [3.4280673478743980e-02, -5.9554503046777407e-01, -1.4997426806130245e00, 2.8797501228862719e00],
         ]
-        c = [1.2650651343045305e-01, 3.6010993010002004e-03, 1.8975934474204015e00, -1.0, 1.0]
-        return pack([np.array(a) for a in A], [np.array(b) for b in B], c)
+        c_old = [1.2650651343045305e-01, 3.6010993010002004e-03, 1.8975934474204015e00]  # only the first m are used
+        A = [c_old[i] * np.array(a) for i, a in enumerate(A)]
+        B = [np.array(b) for b in B]
+        c = np.ones(m + 2)
+        return pack(A, B, c)
     print(f"[warning] no built-in initial guess for m={m}; using a random one (may not converge).")
     return np.random.default_rng(seed).standard_normal(n_params(m))
 

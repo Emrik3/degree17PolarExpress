@@ -79,8 +79,8 @@ def proposed_step(G, theta, m):
 
         S = X X^T                                    (1)
         out_0 = I,  out_1 = S
-        out_{i+2} = c_i (sum_j A_i[j] out_j)(sum_j B_i[j] out_j)    (m, one product each)
-        X <- (sum_k out_k) X                         (1)
+        out_{i+2} = (sum_j A_i[j] out_j)(sum_j B_i[j] out_j)    (m, one product each)
+        X <- (sum_k c_k out_k) X                     (1)
     """
     A, B, c = sc.unpack(theta, m)
     X, tall = _orient(G)
@@ -91,8 +91,8 @@ def proposed_step(G, theta, m):
         k = i + 2
         U = sum(A[i][j] * outs[j] for j in range(k))
         V = sum(B[i][j] * outs[j] for j in range(k))
-        outs.append(c[i] * (U @ V))
-    X = sum(outs) @ X
+        outs.append(U @ V)
+    X = sum(c[k] * outs[k] for k in range(m + 2)) @ X
     return X.mT if tall else X
 
 
@@ -199,7 +199,7 @@ def real_plots(thetas, m, path="h3_c_attn_grads.pt"):
     print("Normalized: sigma max:", s.max().item(), " sigma min:", s.min().item())
 
     pn = torch.linalg.matrix_norm(polar, ord="fro")
-    res = run_methods(A, polar, thetas, m, 1, lambda D: (torch.linalg.matrix_norm(D, ord=2)).item())
+    res = run_methods(A, polar, thetas, m, 1, lambda D: (torch.linalg.matrix_norm(D, ord="fro") / pn).item())
 
     plt.figure()
     for name, (mults, errs) in res.items():
