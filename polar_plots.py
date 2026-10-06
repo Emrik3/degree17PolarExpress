@@ -154,9 +154,10 @@ def run_methods(A, polar, thetas, m, k, err_fn):
     res = {}
 
     # Saftey factor might be needed. Do not apply to the last polynomial.
-    """for i in range(3):
-        for j in range(3):
-            thetas[i][18+j] /= 1.01 **(j)"""
+    # Hard to implement this since c is multiplied with multiple orders of matrix powers.
+    for i in range(3):
+        for j in range(5):
+            thetas[i][18+j] /= 1.01
 
     def run(name, X, step, n_steps, mults_per_step):
         errs, mults = [1.0], [0]
