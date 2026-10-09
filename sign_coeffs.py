@@ -41,6 +41,7 @@ def odd_poly(c, x):
     return x * out
 
 
+
 def taylor_coeffs(q):
     """
     Degree-(2q+1) Taylor polynomial of sign at 1: truncation of
@@ -132,12 +133,12 @@ def remez_chain(l, iters, q, cushion=0.02407327424182761):
     """
     u = 1.0
     coeffs, bounds = [], []
-    for _ in range(iters):
+    for i in range(iters):
         bounds.append((l, u))
-        if 1 - 5e-6 <= l / u:
+        if i + 1 == iters:
             # Already converged: use the Taylor polynomial at 1 (quadratic convergence).
             c = taylor_coeffs(q)
-            u = 2.0 - l
+            u = (2.0 - l)
         else:
             lo = max(l, cushion * u)
             try:
@@ -154,7 +155,11 @@ def remez_chain(l, iters, q, cushion=0.02407327424182761):
             if cushion * u > l:
                 c = c * (2.0 / (odd_poly(c, l) + odd_poly(c, u)))
             l = float(odd_poly(c, l))
-            u = 2.0 - l
+            # Dont scale on last polynomial
+            if i + 2 == iters: # TODO: This should be scaled, just the final one used in machpolar that should not be 
+                u = 2.0 - l
+            else:
+                u = (2.0 - l) * 1.1
         coeffs.append(c)
     return np.array(coeffs), np.array(bounds)
 
@@ -345,20 +350,35 @@ def pin_fixed_point(theta, m, nodes, c, weights=(1,1,1,1), gn_iters=3000, gn_tol
 def initial_guess(m, seed=0):
     """Starting guesses for all values of l for m=3 (degree 17); random otherwise."""
     if m == 3:
-        A = [
-            [8.1900628402201772e00, -1.1341497882285287e01],
-            [5.2695286609514156e00, -1.1355755098785176e01, -8.5575587792319769e00],
-            [2.9941920143595552e-01, 3.9368736424870771e-01, -1.3629994852556693e-01, 8.7543792821015454e-01],
-        ]
-        B = [
-            [5.7224200607981572e00, -1.3349570510955273e01],
-            [2.4027229678283074e01, -6.9033542160046899e00, -8.1581776809768751e00],
-            [3.4280673478743980e-02, -5.9554503046777407e-01, -1.4997426806130245e00, 2.8797501228862719e00],
-        ]
-        c_old = [1.2650651343045305e-01, 3.6010993010002004e-03, 1.8975934474204015e00]  # only the first m are used
-        A = [c_old[i] * np.array(a) for i, a in enumerate(A)]
-        B = [np.array(b) for b in B]
-        c = np.ones(m + 2)
+        
+        A = [[9.9207257146298222e-01, -1.4235516131557799e+00],
+         [2.1560096288878530e-02, -4.2394388872995729e-02, -3.4762121962591784e-02],
+         [5.7824458888809327e-01, 7.6324504283468275e-01, -2.5144805370902978e-01, 1.6390118839860151e+00]]
+
+        B = [[5.7359037938337600e+00, -1.3338110773060512e+01],
+         [2.4029276702105410e+01, -6.9072391698233719e+00, -8.1494614566781305e+00],
+         [1.6007261285642154e-02, -5.8894286688481978e-01, -1.5101956722858789e+00, 2.8974433977565046e+00]]
+
+        c = [1.0257468033619634e+00, 9.7295695731870657e-01, 9.8987345313521957e-01,
+         9.8775529118046457e-01, 9.7289904879592692e-01]
+        return pack(A, B, c)
+    print(f"[warning] no built-in initial guess for m={m}; using a random one (may not converge).")
+    return np.random.default_rng(seed).standard_normal(n_params(m))
+
+def second_guess(m, seed=0):
+    """Starting guesses for all values of l for m=3 (degree 17); random otherwise."""
+    if m == 3:
+        
+        A = [[8.6729480233126677e-01, -6.9836518631981193e-01],
+         [-1.1147442390816923e-02, 2.6052575855847686e-02, -5.1435186240898463e-04],
+         [6.0477086067592456e-01, 4.1139347376019320e-02, 6.9264319658992002e-01, 1.7334074742081027e+00]]
+
+        B = [[4.5191261971647290e+00, -1.3713608530867727e+01],
+         [2.4268301039970623e+01, -5.8444934934706607e+00, -8.3414080982234431e+00],
+         [-2.6040232852332932e-03, -4.5780803823736980e+00, 1.1704804326854277e+00, 2.9419831966072283e+00]]
+
+        c = [6.9367299123216464e-01, 2.1692969375003366e+00, 4.9324625143658657e-01,
+         7.5333658274217785e-01, 5.0255037968437044e-01]
         return pack(A, B, c)
     print(f"[warning] no built-in initial guess for m={m}; using a random one (may not converge).")
     return np.random.default_rng(seed).standard_normal(n_params(m))
@@ -420,6 +440,32 @@ def initial_guess(m, seed=0):
         -1.0000000000000000e00, 1.0000000000000000e00,
     ],
 ]"""
+
+
+def print_eval_coeffs(thetas, m, name="co", spec=".16e"):
+    """Print thetas as a nested Python list: per step [A_list, B_list, c]."""
+    def fmt(v):
+        return "[" + ", ".join(format(float(x), spec) for x in v) + "]"
+
+    def fmt_c(v, per_line=3):
+        vals = [format(float(x), spec) for x in v]
+        lines = [", ".join(vals[i:i + per_line]) for i in range(0, len(vals), per_line)]
+        return "[" + (",\n         ".join(lines)) + "]"
+
+    out = [f"{name} = ["]
+    for t, th in enumerate(thetas):
+        A, B, c = unpack(np.asarray(th, float), m)
+        out.append("    [")
+        out.append("        [" + ",\n         ".join(fmt(a) for a in A) + "],")
+        out.append("")
+        out.append("        [" + ",\n         ".join(fmt(b) for b in B) + "],")
+        out.append("")
+        out.append("        " + fmt_c(c))
+        out.append("    ]" + ("," if t < len(thetas) - 1 else ""))
+        if t < len(thetas) - 1:
+            out.append("")
+    out.append("]")
+    print("\n".join(out))
 # ----------------------------------------------------------------------------
 # Main driver
 # ----------------------------------------------------------------------------
@@ -430,9 +476,26 @@ def compute(l, iters, m=3, cushion=0.02407327424182761, out_dir="coeffs/", gn_to
 
     remez_c, bounds = remez_chain(l, iters, q, cushion)
 
+    # Maybe implement saftey here? Need to not do it here of update the bounds with the new coeffs here for the eval scheme to work, should not be too hard
+    # This did not work, goes over 2 directly. Hmm. Meybe just easier to implement in other way?
+    SHRINK = [1.01]          # per-step safety factors; the last entry is reused
+
+    def shrink_of(j):
+        return SHRINK[min(j, len(SHRINK) - 1)]
+
+    """for j in range(1,len(remez_c)):
+        s = shrink_of(j-1)
+        remez_c[j-1] /= s ** (2 * np.arange(remez_c.shape[1]) + 1)   # p(x) -> p(x/s)
+       
+        bounds[j][0] = min(odd_poly(remez_c[j-1], np.linspace(bounds[j-1][0], bounds[j-1][1], 10000)))
+        bounds[j][1] = max(odd_poly(remez_c[j-1], np.linspace(bounds[j-1][0], bounds[j-1][1], 10000)))
+    print(bounds)"""
+
     theta = initial_guess(m)
     thetas = []
     for t in range(iters):
+        if t == 1:
+            theta = second_guess(m)
         
         lt, ut = bounds[t]
         c = remez_c[t]
@@ -534,6 +597,22 @@ def plot_fit_debug(c, theta, m, l, u, nodes, title=""):
     plt.tight_layout()
     plt.show()
 
+def SP8_coeffs(b):
+    f4 = b[8]
+    c1 = b[7] / (2 * f4)
+    t2 = b[6] / f4 - c1**2
+    t1 = b[5] / f4 - c1 * t2
+    d0 = 0.25 * (1 - t2**2 + 4 * b[4] / f4 - 4 * c1 * t1)
+    e2 = 0.5 * (t2 + 1)
+    d2 = 0.5 * (t2 - 1)
+    e1 = c1 * d0 + t1 * e2 - b[3] / f4
+    d1 = t1 - e1
+    f2 = b[2] - f4 * (d0 * e2 + d1 * e1)
+    f1 = b[1] - f4 * d0 * e1
+    f0 = b[0]
+
+    return c1, d0, d1, d2, e1, e2, f0, f1, f2, f4
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--l", type=float, default=1e-3, help="lower end of the interval [l, 1]")
@@ -545,9 +624,11 @@ def main():
     a = ap.parse_args()
 
     remez_c, thetas, bounds = compute(a.l, a.iters, a.m, a.cushion, a.out)
+    print_eval_coeffs(thetas, a.m)
 
     x = np.logspace(np.log10(a.l), 0, 5000)
     e_remez = np.max(np.abs(1 - compose_remez(remez_c, x)))
+    print(remez_c)
     e_eval = np.max(np.abs(1 - compose_eval(thetas, a.m, x)))
     print(f"max |1 - composition| on [{a.l}, 1], each polynomial applied once:  "
           f"Remez {e_remez:.3e},  evaluation scheme {e_eval:.3e}")
@@ -557,6 +638,14 @@ def main():
     e_eval_r = np.max(np.abs(1 - compose_eval(list(thetas) + [thetas[-1]] * rep, a.m, x)))
     print(f"  ... with the last polynomial repeated {rep} more times:  Remez {e_remez_r:.3e},  evaluation scheme {e_eval_r:.3e}")
 
+
+    """def fmt(v, spec=".17g"):
+        return ", ".join(format(float(x), spec) for x in v)
+
+    # One line per step, comma separated
+    for t in range(len(remez_c)):
+        print(f"[{fmt(SP8_coeffs(remez_c[t]))}]")
+"""
     if a.plot:
         import matplotlib.pyplot as plt
 
