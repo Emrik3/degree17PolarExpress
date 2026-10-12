@@ -44,7 +44,6 @@ coeffs_listPE = [(a / 1.01, b / 1.01**3, c / 1.01**5) for (a, b, c) in coeffs_li
 # ----------------------------------------------------------------------------
 # One step of each method (3 / 2 / 3 / m+2 matrix-matrix multiplications)
 # ----------------------------------------------------------------------------
-DTYPE = torch.float64
 def _orient(G):
     """double precision, and transpose so the Gram matrix X X^T is the small one."""
     X = G.to(DTYPE)
@@ -119,12 +118,6 @@ def SP8_coeffs(b):
 
 def SP8_step(G, coeffs):
     c1, d0, d1, d2, e1, e2, f0, f1, f2, f4 = coeffs
-    safe = 1.01
-
-    f0 = f0 / safe
-    f1 = f1 / safe
-    f2 = f2 / safe
-    f4 = f4 / safe
 
     X, tall = _orient(G)
 
@@ -172,7 +165,7 @@ def load_proposed(directory=COEFFS_DIR, method="eval"):
 # Helpers
 # ----------------------------------------------------------------------------
 def save_curve(name, xs, ys):
-    with open(f"{name}.csv", "w", newline="") as f:
+    with open(f"{name}{DTYPE}.csv", "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["x", "y"])
         for x, y in zip(xs, ys):
@@ -267,20 +260,20 @@ def run_methods(A, polar, thetas, sp8_c, m, k, err_fn):
     run("Polar Express", A.clone(),
         lambda X, i: polar_express_step(X, coeffs_listPE[min(i, len(coeffs_listPE) - 1)]), 10 * k, 3)
     run("Jordan", A.clone(), lambda X, i: jordan_step(X), 10 * k, 3)
-    if thetas is not None:
+    """if thetas is not None:
         run("Proposed New Method", A.clone(),
             lambda X, i: proposed_step(X, thetas[min(i, len(thetas) - 1)], m), 6 * k, m + 2)
     if sp8_c is not None:  # SP8 also needs m + 2 = 5 multiplications per step
         run("SP8", A.clone(),
-            lambda X, i: SP8_step(X, sp8_c[min(i, len(sp8_c) - 1)]), 6 * k, m + 2)
+            lambda X, i: SP8_step(X, sp8_c[min(i, len(sp8_c) - 1)]), 6 * k, m + 2)"""
     if sp8_c is not None:  # SP8 also needs m + 2 = 5 multiplications per step
         run_mach("SP8-mach", A.clone(),
             lambda X, i: MachPolar17(X, i+1), 6 * k, m + 2)
-    if N_PE > 0 and sp8_c is not None:
+    """if N_PE > 0 and sp8_c is not None:
         run(f"{N_PE} PE + SP8", A.clone(),
             lambda X, i: pe_sp8_step(X, i, sp8_c),
             N_PE + 6 * k - SP8_START,
-            lambda i: 3 if i < N_PE else m + 2)
+            lambda i: 3 if i < N_PE else m + 2)"""
     run("Newton-Schulz", A.clone(), lambda X, i: newton_schulz_step(X), 15 * k, 2)
     return res
 
@@ -322,12 +315,12 @@ def real_plots(thetas, sp8_c, m, path="h3_c_attn_grads.pt"):
     print("Normalized: sigma max:", s.max().item(), " sigma min:", s.min().item())
 
     bounds = np.load("coeffs/bounds.npy")
-    trace(lambda X, i: hybrid_step(X, i, thetas, sp8_c, m, HYBRID_EVAL), A, 4, bounds)
+    #trace(lambda X, i: hybrid_step(X, i, thetas, sp8_c, m, HYBRID_EVAL), A, 4, bounds)
 
 
     pn = torch.linalg.matrix_norm(polar, ord="fro")
     res = run_methods(A, polar, thetas, sp8_c, m, 1,
-                      lambda D: (torch.linalg.matrix_norm(D, ord="fro") / pn).item())
+                      lambda D: (torch.linalg.matrix_norm(D, ord="fro") /pn).item())
 
     plt.figure()
     for name, (mults, errs) in res.items():
@@ -343,7 +336,7 @@ def real_plots(thetas, sp8_c, m, path="h3_c_attn_grads.pt"):
     if "SP8" in res:
         print(f"Final error SP8: {res['SP8'][1][-1]}")
     for tag, name in (("NS", "Newton-Schulz"), ("PE", "Polar Express"),
-                      ("PS", "Proposed New Method"), ("SP8", "SP8")):
+                      ("Jordan", "Jordan"), ("Hybrid", f"Hybrid ({HYBRID_EVAL} eval + SP8)")):
         if name in res:
             save_curve(f"gradient_frobenius_error{tag}", *res[name])
 
@@ -403,7 +396,7 @@ def synthetic_plots(thetas, sp8_c, m, l, rows=6912, cols=768, k=2, show_bounds=F
 
 import torch
 
-co = [
+"""co = [
     [
         [[9.9207257146298222e-01, -1.4235516131557799e+00],
          [2.1560096288878530e-02, -4.2394388872995729e-02, -3.4762121962591784e-02],
@@ -498,11 +491,65 @@ def MachPolar17(G: torch.Tensor, steps: int) -> torch.Tensor:
     if G.size(-2) > G.size(-1):
         X = X.mT
     return X
+"""
+
+co_sp8 = coeffs = [
+    (-2.1450087827058155, 0.29396535045034056, 0.16564530452274018, 0.9988929479720614, -0.906665746109691, 1.9988929479720614, 25.99136111644188, 12052.60374424412, -11279.144155547205, 48195.37579439395),
+    (-9.215228737746779, 15.226789260114288, -27.216283088421278, 27.164619806031695, -31.54094820083492, 28.164619806031695, 10.911924679545837, 6.264900510722015, -1.4840413208305847, 0.17436581666204878),
+    (-7.258013069963741, 9.451803701658378, -14.987438671567446, 17.128528620558203, -17.40886586211309, 18.128528620558203, 4.795342626110442, 0.47308909264308596, -0.41059272972328387, 0.13049916146837265),
+    (-4.78196423339086, 7.000686851634086, -7.885850300449263, 8.422649692679546, -8.139250578354279, 9.422649692679546, 3.2596683428816418, -1.0089166731615196, -0.05296539786546717, 0.127649273319433),
+    (-4.533333333333333, 5.756277183405416, -6.55832654557841, 7.532136752136752, -7.162421447169578, 8.532136752136752, 3.338470458984375, -0.8060344513621498, -0.1741587385315846, 0.196380615234375),
+]
+
+A = [[9.9207257146298222e-01, -1.4235516131557799e+00],
+     [2.1560096288878530e-02, -4.2394388872995729e-02, -3.4762121962591784e-02],
+     [5.7824458888809327e-01, 7.6324504283468275e-01, -2.5144805370902978e-01, 1.6390118839860151e+00]]
+
+B = [[5.7359037938337600e+00, -1.3338110773060512e+01],
+     [2.4029276702105410e+01, -6.9072391698233719e+00, -8.1494614566781305e+00],
+     [1.6007261285642154e-02, -5.8894286688481978e-01, -1.5101956722858789e+00, 2.8974433977565046e+00]]
+
+c = [1.0257468033619634e+00, 9.7295695731870657e-01, 9.8987345313521957e-01, 9.8775529118046457e-01, 9.7289904879592692e-01]
+
+@torch.compile
+def MachPolar17(G: torch.Tensor, steps: int) -> torch.Tensor:
+    assert G.ndim >= 2
+    X = G.bfloat16()  # for speed
+    if G.size(-2) > G.size(-1):
+        X = X.mT  # this reduces FLOPs
+    X = X / (X.norm(dim=(-2, -1), keepdim=True) * 1.01 + 1e-7)
+    m = 3
+
+    S = X @ X.mT
+    eye = torch.eye(S.size(-1), dtype=S.dtype, device=S.device).expand_as(S)
+    outs = [eye, S]
+    for i in range(m):
+        k = i + 2
+        U = sum(A[i][j] * outs[j] for j in range(k))
+        V = sum(B[i][j] * outs[j] for j in range(k))
+        outs.append(U @ V)
+    X = sum(c[k] * outs[k] for k in range(m + 2)) @ X
+
+    for i in range(1, steps):
+        t = min(i, len(co_sp8) - 1)
+        c1, d0, d1, d2, e1, e2, f0, f1, f2, f4 = co_sp8[t]
+        S1 = X @ X.mT
+        S0 = torch.eye(S1.size(-1), dtype=S1.dtype, device=S1.device).expand_as(S1)
+        S2 = S1 @ S1
+        S3 = S2 @ (c1 * S1 + S2)
+        S4 = (d0 * S0 + d1 * S1 + d2 * S2 + S3) @ (e1 * S1 + e2 * S2 + S3)
+        X = (f0 * S0 + f1 * S1 + f2 * S2 + f4 * S4) @ X
+
+    if G.size(-2) > G.size(-1):
+        X = X.mT
+    return X
 
 
 
 def trace(step, A, n_steps, bounds=None):
+    # TODO: Maybe make a plot or table out of this to have in the article.
     global DTYPE
+    dtype = DTYPE
     Xb = A.bfloat16(); Xr = A.double()
     for i in range(n_steps):
         DTYPE = torch.float64
@@ -523,7 +570,7 @@ def trace(step, A, n_steps, bounds=None):
         if not (smax < 1e3):    # also stops on huge finite values
             break
         Xb, Xr = Xb_next, Xr_next
-    DTYPE = torch.float64
+    DTYPE = dtype
 
 # ----------------------------------------------------------------------------
 def main():
@@ -533,16 +580,21 @@ def main():
                     help="proposed method: Gauss-Newton fitted scheme (eval), SP8 (sp8, needs m=3), or both")
     ap.add_argument("--real", action="store_true", help="use h3_c_attn_grads.pt instead of the synthetic matrix")
     ap.add_argument("--l", type=float, default=None, help="smallest singular value (default: the l used for the coeffs)")
+    ap.add_argument("--dtype", default="float64", help="smallest singular value (default: the l used for the coeffs)")
     ap.add_argument("--bounds", action="store_true", help="also plot the theoretical bounds")
     ap.add_argument("--hybrid", type=int, default=0,
                     help="use the eval scheme for the first N steps, then SP8 (forces --method both)")
-    ap.add_argument("--npe", type=int, default=0, help="PE steps before SP8")
-    ap.add_argument("--sp8-start", type=int, default=1, help="first SP8 polynomial index after the PE steps")
+    
     a = ap.parse_args()
-    global N_PE, SP8_START
-    N_PE, SP8_START = a.npe, a.sp8_start
-    if a.npe > 0 and a.method == "eval":
-        a.method = "both"
+
+    global DTYPE
+
+    if a.dtype == "float64":
+        DTYPE = torch.float64
+    elif a.dtype == "bfloat16":
+        DTYPE = torch.bfloat16
+    else:
+        raise ValueError(f"DTYPE {a.dtype} not implemented.")
 
     global HYBRID_EVAL
     HYBRID_EVAL = a.hybrid

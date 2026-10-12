@@ -110,7 +110,7 @@ def build_schemes(method, remez_c, thetas, m):
         if m != 3:
             raise SystemExit("SP8 is only defined for m = 3 (degree 17).")
         sp8_c = [SP8_coeffs(c) for c in remez_c]
-        #print(sp8_c)
+        print(sp8_c)
         schemes.append(dict(
             label="SP8", tag="sp8", diff="step{t}_sp8_diff", style=":", color="tab:red",
             step=lambda t, x: SP8_step(np.asarray(x, dtype=float), sp8_c[t]),

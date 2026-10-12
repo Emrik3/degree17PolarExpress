@@ -123,7 +123,7 @@ def odd_remez(q, l, u, tol=1e-15, max_iter=100):
     return c, abs(E)
 
 
-def remez_chain(l, iters, q, cushion=0.02407327424182761):
+def remez_chain(l, iters, q, cushion=0.02407327424182761, s=1.05):
     """
     Composition of `iters` Remez polynomials.
 
@@ -156,10 +156,10 @@ def remez_chain(l, iters, q, cushion=0.02407327424182761):
                 c = c * (2.0 / (odd_poly(c, l) + odd_poly(c, u)))
             l = float(odd_poly(c, l))
             # Dont scale on last polynomial
-            if i + 2 == iters: # TODO: This should be scaled, just the final one used in machpolar that should not be 
+            if i + 2 == iters: 
                 u = 2.0 - l
             else:
-                u = (2.0 - l) * 1.1
+                u = (2.0 - l) * s
         coeffs.append(c)
     return np.array(coeffs), np.array(bounds)
 
@@ -470,11 +470,11 @@ def print_eval_coeffs(thetas, m, name="co", spec=".16e"):
 # Main driver
 # ----------------------------------------------------------------------------
 def compute(l, iters, m=3, cushion=0.02407327424182761, out_dir="coeffs/", gn_tol=1e-15, gn_iters=4000,
-            pin_weights=(1e1, 1e2, 1e3, 1e4), degenerate_width=1e-3):
+            pin_weights=(1e1, 1e2, 1e3, 1e4), degenerate_width=1e-3, s=1.05):
     q = 2**m
     print(f"l = {l}, iterations = {iters}, q = {q} (degree {2 * q + 1} per iteration)")
 
-    remez_c, bounds = remez_chain(l, iters, q, cushion)
+    remez_c, bounds = remez_chain(l, iters, q, cushion, s)
 
     # Maybe implement saftey here? Need to not do it here of update the bounds with the new coeffs here for the eval scheme to work, should not be too hard
     # This did not work, goes over 2 directly. Hmm. Meybe just easier to implement in other way?
@@ -621,14 +621,15 @@ def main():
     ap.add_argument("--cushion", type=float, default=0.02407327424182761, help="0 disables")
     ap.add_argument("--out", default="coeffs/", help="output directory")
     ap.add_argument("--plot", action="store_true", help="plot the composed approximation")
+    ap.add_argument("--s", type=float, default=1.05, help="saftey factor")
+
     a = ap.parse_args()
 
-    remez_c, thetas, bounds = compute(a.l, a.iters, a.m, a.cushion, a.out)
+    remez_c, thetas, bounds = compute(a.l, a.iters, a.m, a.cushion, a.out, s=a.s)
     print_eval_coeffs(thetas, a.m)
 
     x = np.logspace(np.log10(a.l), 0, 5000)
     e_remez = np.max(np.abs(1 - compose_remez(remez_c, x)))
-    print(remez_c)
     e_eval = np.max(np.abs(1 - compose_eval(thetas, a.m, x)))
     print(f"max |1 - composition| on [{a.l}, 1], each polynomial applied once:  "
           f"Remez {e_remez:.3e},  evaluation scheme {e_eval:.3e}")
